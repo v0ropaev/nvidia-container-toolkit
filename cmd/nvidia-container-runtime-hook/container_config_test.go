@@ -1,6 +1,10 @@
 package main
 
 import (
+	"fmt"
+	"io"
+	"log"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -641,4 +645,30 @@ func TestGetDriverCapabilities(t *testing.T) {
 			require.EqualValues(t, tc.expectedCapabilities, capabilities)
 		})
 	}
+}
+
+func TestUnsupportedDriverCapabilitiesPanicNamesTheAllowedSet(t *testing.T) {
+	// The message is all the user gets to learn which capabilities they may
+	// ask for, so it has to name the configured set and not the part of their
+	// own request that was in it.
+	log.SetOutput(io.Discard)
+	defer log.SetOutput(os.Stderr)
+
+	c := hookConfig{
+		Config: &config.Config{
+			SupportedDriverCapabilities: "compute,display,utility,video",
+		},
+	}
+	i, err := image.New(
+		image.WithEnvMap(map[string]string{
+			image.EnvVarNvidiaDriverCapabilities: "compute,utility,grahics",
+		}),
+	)
+	require.NoError(t, err)
+
+	defer func() {
+		require.Contains(t, fmt.Sprint(recover()), "(allowed 'compute,display,utility,video')")
+	}()
+
+	c.getDriverCapabilities(i, false)
 }
